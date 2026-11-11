@@ -37,7 +37,7 @@ set -euo pipefail
 # Configuration
 # --------------------------------------------------
 
-PLUGIN_SLUG="skyrocket-wordpress-utilities"
+PLUGIN_SLUG="skyrocket-booking-engine"
 MAIN_FILE="${PLUGIN_SLUG}.php"
 CHANGELOG_FILE="CHANGELOG.md"
 
