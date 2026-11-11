@@ -12,6 +12,9 @@ if (!defined('ABSPATH'))
 define('BBE_PATH', plugin_dir_path(__FILE__));
 define('BBE_URL', plugin_dir_url(__FILE__));
 
+// Plugin version constant, used for cache-busting CSS and JavaScript.
+define('BBE_VERSION', '1.0.7');
+
 // Load includes
 require_once BBE_PATH . 'includes/class-bbe-db.php';
 require_once BBE_PATH . 'includes/class-bbe-locations.php';
