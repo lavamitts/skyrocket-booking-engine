@@ -1,0 +1,129 @@
+/* Ensure the booking container flows naturally from top to bottom */
+#bbe-booking-container {
+  width: 100% !important;
+  background: #fff;
+  padding: 35px;
+  box-sizing: border-box;
+  border: 1px solid var(--borderColor, #eaeaea);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+/* Hide any leftover default WooCommerce add-to-cart elements in the sidebar */
+.product div.summary form.cart div.quantity,
+.product div.summary form.cart .qty,
+.product div.summary > form.cart:not(#bbe-cart-form) {
+  display: none !important;
+}
+
+.bbe-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 1.1em;
+}
+
+.bbe-select {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  font-size: 1em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.bbe-calendar-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 600px;
+  margin-bottom: 15px;
+}
+
+.bbe-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.bbe-day-column {
+  background: #fdfdfd;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 130px;
+}
+
+.bbe-day-title {
+  font-size: 13px;
+  font-weight: bold;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.bbe-slot-btn {
+  display: block;
+  width: 100%;
+  background: #f7f7f7;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.bbe-slot-btn:hover {
+  background: #007cba;
+  color: #fff;
+  border-color: #007cba;
+}
+
+.bbe-slot-btn.selected {
+  background: #46b450;
+  color: #fff;
+  border-color: #46b450;
+}
+
+.bbe-no-slots {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  padding: 15px 0;
+}
+
+/* Make the Add to Cart form sit naturally at the bottom of the workflow */
+#bbe-cart-form {
+  margin-top: 35px;
+  background: #f9f9f9;
+  padding: 25px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#bbe-cart-form button[type=submit] {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  padding: 14px;
+  font-size: 1.15em;
+  text-align: center;
+  background: #007cba;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#bbe-cart-form button[type=submit]:hover {
+  background: #005a87;
+}
