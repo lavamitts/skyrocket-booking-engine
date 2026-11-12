@@ -16,6 +16,7 @@ define('BBE_URL', plugin_dir_url(__FILE__));
 define('BBE_VERSION', '1.0.0');
 
 // Load includes
+require_once BBE_PATH . 'includes/hooks/bootstrapper.php';
 require_once BBE_PATH . 'includes/class-bbe-db.php';
 require_once BBE_PATH . 'includes/class-bbe-locations.php';
 require_once BBE_PATH . 'includes/class-bbe-product-type.php';

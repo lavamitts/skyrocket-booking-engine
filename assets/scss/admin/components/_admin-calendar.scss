@@ -1,3 +1,8 @@
+@use "variables" as v;
+
+// Define hour height variable for grid scaling (120px = 2px per minute)
+$hour-height: 90px;
+
 .bbe-calendar-wrap {
     margin-right: 20px;
 }
@@ -54,15 +59,15 @@
     font-size: 11px;
     color: #555;
     font-weight: 600;
-    height: 60px;
+    height: $hour-height;
     box-sizing: border-box;
 }
 
 /* VIEW 1: Grid Timetable Cells & Color Coding */
 .bbe-time-cell {
     background: #fff;
-    min-height: 60px;
-    height: 60px;
+    min-height: $hour-height;
+    height: $hour-height;
     padding: 4px;
     position: relative;
     border-bottom: 1px solid #f0f0f1;
@@ -107,7 +112,7 @@
         rgba(0, 0, 0, 0.02) 10px,
         rgba(0, 0, 0, 0.02) 20px
     );
-    background-color: #f0f0f0 !important; /* Matches closed hour gray, or use your custom indicator */
+    background-color: #f0f0f0 !important;
     opacity: 0.125;
 }
 
@@ -120,14 +125,13 @@
     background: #e1f5fe;
     border-left: 4px solid #0288d1;
     padding: 2px 4px;
-    font-size: 11px;
     border-radius: 3px;
     box-sizing: border-box;
     overflow: hidden;
     z-index: 10;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     line-height: 0.9rem;
-    font-size: 9px;
+    font-size: 9.5px !important;
 
     strong {
         color: #01579b;
@@ -137,27 +141,27 @@
         display: grid;
         grid-template-columns: 2fr 3fr;
         align-items: center;
+    }
+}
 
-        .bbe-payment-badge {
-            display: inline-block;
-            font-size: 9px;
-            font-weight: 700;
-            padding: 1px 2px;
-            border-radius: 2px;
-            text-align: center;
+.bbe-payment-badge {
+    display: inline-block;
+    // font-size: 9px;
+    font-weight: 700;
+    padding: 1px 2px;
+    border-radius: 4px;
+    text-align: center;
 
-            &.bbe-pay-paid {
-                background: #e8f5e9;
-                color: #2e7d32;
-                border: 1px solid #c8e6c9;
-            }
+    &.bbe-pay-paid {
+        background: v.$paid-colour1;
+        color: v.$paid-colour2;
+        border: 1px solid v.$paid-colour2;
+    }
 
-            &.bbe-pay-arrival {
-                background: #fff8e1;
-                color: #f57f17;
-                border: 1px solid #ffe0b2;
-            }
-        }
+    &.bbe-pay-arrival {
+        background: v.$to-pay-colour1;
+        color: v.$to-pay-colour2;
+        border: 1px solid v.$to-pay-colour2;
     }
 }
 
@@ -172,6 +176,7 @@
     padding: 20px;
     margin-bottom: 20px;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    border-radius: v.$admin-radius;
 
     h3 {
         margin-top: 0;
@@ -185,4 +190,44 @@
     color: #666;
     font-style: italic;
     margin: 0;
+}
+
+table.bbe-booking-calendar-list-view-table {
+    border: 0;
+
+    thead {
+        tr {
+            th {
+                background-color: v.$dark-grey;
+                color: white;
+                font-weight: bold;
+
+                &:first-of-type {
+                    border-top-left-radius: v.$admin-radius;
+                }
+
+                &:last-of-type {
+                    border-top-right-radius: v.$admin-radius;
+                }
+            }
+        }
+    }
+    tbody {
+        tr {
+            td {
+                border-bottom: 1px v.$dark-grey dotted;
+                vertical-align: middle;
+
+                .bbe-payment-badge {
+                    min-width: 6rem;
+                }
+            }
+
+            &:last-of-type {
+                td {
+                    border-bottom: 0 !important;
+                }
+            }
+        }
+    }
 }

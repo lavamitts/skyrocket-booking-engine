@@ -1,0 +1,6 @@
+// Kill link to Yaymail
+table.wc_emails {
+    .wc-email-settings-table-yaymail_cs {
+        display: none !important;
+    }
+}

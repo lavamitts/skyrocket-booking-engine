@@ -25,16 +25,20 @@ class BBE_Admin_Calendar
 
     public static function enqueue_admin_assets($hook)
     {
+        wp_enqueue_style('bbe-admin-calendar-css', BBE_URL . 'assets/css/admin/admin.css', [], '1.0.0');
         if (strpos($hook, 'bbe-booking-calendar') === false) {
             return;
         }
-        wp_enqueue_style('bbe-admin-calendar-css', BBE_URL . 'assets/css/admin/admin.css', [], '1.0.0');
         wp_enqueue_script('bbe-admin-calendar-js', BBE_URL . 'assets/js/admin/admin-calendar.js', ['jquery'], '1.0.0', true);
     }
 
     public static function render_calendar_page()
     {
         global $wpdb;
+
+        // Define grid row height variable to match SCSS $hour-height (90px = 1.5px per minute)
+        $hour_height = 90;
+        $scale_factor = $hour_height / 60; // 2px per minute scaling factor
 
         // Get filter inputs
         $location_id = isset($_GET['location_id']) ? intval($_GET['location_id']) : 0;
@@ -136,7 +140,7 @@ class BBE_Admin_Calendar
                     for ($hour = 8; $hour <= 20; $hour++):
                         $time_label = sprintf('%02d:00', $hour);
                         ?>
-                        <div class="bbe-time-label">
+                        <div class="bbe-time-label" style="height: <?php echo intval($hour_height); ?>px;">
                             <?php echo $time_label; ?>
                         </div>
                         <?php for ($d = 0; $d < 7; $d++):
@@ -153,7 +157,8 @@ class BBE_Admin_Calendar
                             }
                             ?>
                             <div class="bbe-time-cell <?php echo $cell_class; ?>" data-date="<?php echo $slot_date; ?>"
-                                data-hour="<?php echo $hour; ?>">
+                                data-hour="<?php echo $hour; ?>"
+                                style="height: <?php echo intval($hour_height); ?>px; min-height: <?php echo intval($hour_height); ?>px;">
                                 <?php
                                 // Output bookings whose start time matches this specific date and hour row
                                 foreach ($bookings as $b) {
@@ -164,10 +169,10 @@ class BBE_Admin_Calendar
                                     if ($b_date === $slot_date && $b_start_hour === $hour) {
                                         $duration_mins = intval($b['duration']);
 
-                                        $chip_height = ($duration_mins * 1) - 8;
-                                        $top_offset = ($b_start_min / 60) * 60;
+                                        $chip_height = ($duration_mins * $scale_factor) - 8;
+                                        $top_offset = ($b_start_min / 60) * ($hour_height);
 
-                                        $chip_style = 'height: ' . max(30, $chip_height) . 'px; top: ' . ($top_offset + 4) . 'px;';
+                                        $chip_style = 'height: ' . max(40, $chip_height) . 'px; top: ' . ($top_offset + 4) . 'px;';
 
                                         // Strict slug check based on confirmed database values ('cod' vs 'stripe_cc')
                                         $payment_method = trim(strtolower($b['payment_method']));
@@ -177,8 +182,8 @@ class BBE_Admin_Calendar
                                         $payment_class = $is_cod ? 'bbe-pay-arrival' : 'bbe-pay-paid';
 
                                         echo '<div class="bbe-grid-booking-chip" style="' . esc_attr($chip_style) . '" title="' . esc_attr($b['service_name'] . ' - ' . $b['customer_name'] . ' (' . $b['duration'] . 'm)') . '">';
-                                        echo '<strong>' . esc_html($b['service_name']) . '</strong><br>';
-                                        echo '<small>' . esc_html($b['customer_name']) . ' (' . esc_html($b['duration']) . 'm)</small><br>';
+                                        echo '<span class="block bold navy">' . esc_html($b['service_name']) . '</span>';
+                                        echo '<span class="block">' . esc_html($b['customer_name']) . ' (' . esc_html($b['duration']) . 'm)</span>';
                                         echo '<div class="bbe-grid-booking-chip__order-payment">';
                                         echo '<a href="' . esc_url($b['order_url']) . '" target="_blank">Order #' . $b['order_id'] . '</a>';
                                         echo '<span class="bbe-payment-badge ' . esc_attr($payment_class) . '">' . esc_html($payment_label) . '</span>';
@@ -214,7 +219,7 @@ class BBE_Admin_Calendar
                                     <?php _e('No bookings scheduled for this day.', 'bbe'); ?>
                                 </p>
                             <?php else: ?>
-                                <table class="wp-list-table widefat fixed striped">
+                                <table class="wp-list-table widefat fixed striped bbe-booking-calendar-list-view-table">
                                     <thead>
                                         <tr>
                                             <th>
@@ -227,7 +232,10 @@ class BBE_Admin_Calendar
                                                 <?php _e('Customer Name', 'bbe'); ?>
                                             </th>
                                             <th>
-                                                <?php _e('Order Link & Status', 'bbe'); ?>
+                                                <?php _e('Order Link', 'bbe'); ?>
+                                            </th>
+                                            <th>
+                                                <?php _e('Status', 'bbe'); ?>
                                             </th>
                                         </tr>
                                     </thead>
@@ -243,14 +251,24 @@ class BBE_Admin_Calendar
                                                 <td><strong>
                                                         <?php echo date('H:i', strtotime($b['start_time'])); ?> &mdash;
                                                         <?php echo date('H:i', strtotime($b['end_time'])); ?>
-                                                    </strong> (
-                                                    <?php echo $b['duration']; ?>m)
+                                                    </strong> (<?php echo $b['duration']; ?> mins)
                                                 </td>
                                                 <td>
                                                     <?php echo esc_html($b['service_name']); ?>
                                                 </td>
                                                 <td>
-                                                    <?php echo esc_html($b['customer_name']); ?>
+                                                    <?php
+                                                    $customer_name = esc_html($b['customer_name']);
+                                                    $customer_email = esc_html($b['customer_email']);
+
+                                                    if (!empty($customer_email)) {
+                                                        // Link to WooCommerce orders list filtered by this customer's email
+                                                        $admin_url = admin_url('edit.php?post_type=shop_order&_customer_user=' . urlencode($customer_email));
+                                                        echo '<a href="' . esc_url($admin_url) . '" title="' . esc_attr($customer_email) . '">' . $customer_name . '</a>';
+                                                    } else {
+                                                        echo $customer_name;
+                                                    }
+                                                    ?>
                                                 </td>
                                                 <td>
                                                     <a href="<?php echo esc_url($b['order_url']); ?>" target="_blank"
@@ -258,6 +276,8 @@ class BBE_Admin_Calendar
                                                         <?php _e('View Order #', 'bbe'); ?>
                                                         <?php echo $b['order_id']; ?>
                                                     </a>
+                                                </td>
+                                                <td>
                                                     <span class="bbe-payment-badge <?php echo esc_attr($payment_class); ?>"
                                                         style="margin-left: 6px;">
                                                         <?php echo esc_html($payment_label); ?>
@@ -320,6 +340,7 @@ class BBE_Admin_Calendar
                     $b_date = date('Y-m-d', strtotime($start_dt));
 
                     if ($b_date >= $start_date && $b_date <= $end_date) {
+                        /** @var WC_Order_Item_Product $item */
                         $product = $item->get_product();
                         $duration = $product ? intval($product->get_meta('_bbe_duration', true)) : 30;
                         if (!$duration)
@@ -334,6 +355,7 @@ class BBE_Admin_Calendar
                             'duration' => $duration,
                             'service_name' => $item->get_name(),
                             'customer_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
+                            'customer_email' => $order->get_billing_email(),
                             'order_id' => $order->get_id(),
                             'order_url' => $order->get_edit_order_url(),
                             'payment_method' => $order->get_payment_method()
@@ -353,7 +375,6 @@ class BBE_Admin_Calendar
 
     /**
      * Check if a given hour falls into an active working shift, factoring in specific date exceptions/exclusions.
-     * Returns: true if working, false if closed, 'exception' if explicitly excluded for that date.
      */
     private static function is_working_hour($location_id, $date_str, $hour, $shifts)
     {
@@ -370,21 +391,19 @@ class BBE_Admin_Calendar
 
         if ($exclusion) {
             if (!empty($exclusion->start_time) && $exclusion->start_time !== '00:00:00') {
-                $ex_start_h = intval(substr($exclusion->start_time, 0, 2)); // 16
-                $ex_end_h = intval(substr($exclusion->end_time, 0, 2));   // 17
-                $ex_end_m = intval(substr($exclusion->end_time, 3, 2));   // 0
+                $ex_start_h = intval(substr($exclusion->start_time, 0, 2));
+                $ex_end_h = intval(substr($exclusion->end_time, 0, 2));
+                $ex_end_m = intval(substr($exclusion->end_time, 3, 2));
 
-                // If exception is 16:00 to 17:00, it blocks hour 16.
-                // If end minute > 0, it extends into the end hour.
                 $is_in_exception = ($ex_end_m > 0)
                     ? ($hour >= $ex_start_h && $hour <= $ex_end_h)
                     : ($hour >= $ex_start_h && $hour < $ex_end_h);
 
                 if ($is_in_exception) {
-                    return 'exception'; // STOP HERE and return exception!
+                    return 'exception';
                 }
             } else {
-                return 'exception'; // Full day block
+                return 'exception';
             }
         }
 

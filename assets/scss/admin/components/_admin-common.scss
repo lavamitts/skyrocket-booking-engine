@@ -1,0 +1,14 @@
+@use "variables" as v;
+
+.block {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.bold {
+    font-weight: bold;
+}
+
+.navy {
+    color: v.$slate-navy;
+}
