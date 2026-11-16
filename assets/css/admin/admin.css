@@ -232,20 +232,3 @@ table.wc_emails .wc-email-settings-table-yaymail_cs {
   color: #0d47a1;
   border: 1px solid #90caf9;
 }
-
-/*
-'<span class="bbe-lozenge bbe-lozenge--service" style="'
-            . 'background-color: #f3e5f5; color: #4a148c; border: 1px solid #ce93d8; '
-            . 'font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; '
-            . 'text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">'
-            . __('SERVICE', 'bbe') . '</span>';
-    }
-
-
-    if ($has_physical) {
-        echo '<span class="bbe-lozenge bbe-lozenge--product" style="'
-            . 'background-color: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; '
-            . 'font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; '
-            . 'text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">'
-            . __('PRODUCT', 'bbe') . '</span>';
-            */

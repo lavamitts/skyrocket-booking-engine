@@ -80,6 +80,12 @@
   transition: all 0.2s ease;
 }
 
+.bbe-slot-btn {
+  background: #ffffff;
+  color: #000000;
+  border-color: #000000;
+}
+
 .bbe-slot-btn:hover {
   background: #007cba;
   color: #fff;
@@ -110,7 +116,7 @@
   box-sizing: border-box;
 }
 
-#bbe-cart-form button[type=submit] {
+#bbe-cart-form button[type="submit"] {
   display: block;
   width: 100%;
   max-width: 400px;
@@ -124,6 +130,6 @@
   cursor: pointer;
 }
 
-#bbe-cart-form button[type=submit]:hover {
+#bbe-cart-form button[type="submit"]:hover {
   background: #005a87;
 }

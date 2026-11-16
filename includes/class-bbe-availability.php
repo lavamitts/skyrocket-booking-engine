@@ -4,8 +4,7 @@ if (!defined('ABSPATH'))
 
 class BBE_Availability
 {
-
-    public static function get_available_slots($product_id, $location_id, $date_str)
+    public static function get_available_slots($product_id, $variation_id, $location_id, $date_str)
     {
         global $wpdb;
 
@@ -15,7 +14,30 @@ class BBE_Availability
             return [];
         }
 
-        $duration = (int) get_post_meta($product_id, '_bbe_duration', true);
+        $target_id = $variation_id ? $variation_id : $product_id;
+        $target_product = wc_get_product($target_id);
+
+        if (!$target_product) {
+            return [];
+        }
+
+        $duration = 0;
+        if ($target_product->is_type('variation')) {
+            $raw_duration = $target_product->get_attribute('pa_duration') ?: $target_product->get_attribute('duration');
+            if (preg_match('/(\d+)/', sanitize_title($raw_duration), $matches)) {
+                $duration = (int) $matches[1];
+            }
+        }
+
+        if (!$duration) {
+            $duration = (int) get_post_meta($target_id, '_bbe_duration', true);
+        }
+
+        // FAILSAFE: If it's a flat simple service product and still has no duration set, default to 15 mins
+        if (!$duration && !$target_product->is_type('variable')) {
+            $duration = 15;
+        }
+
         $buffer = (int) get_post_meta($product_id, '_bbe_buffer', true);
         $total_needed_mins = $duration + $buffer;
 
@@ -49,7 +71,7 @@ class BBE_Availability
         ));
         if (!empty($extra_shifts)) {
             foreach ($extra_shifts as $es) {
-                $shifts[] = $es; // Append extra shift into working pool
+                $shifts[] = $es;
             }
         }
 
@@ -125,18 +147,12 @@ class BBE_Availability
         return $valid_slots;
     }
 
-    /**
-     * Fetch all shifts and overrides for a given location across a 7-day week window.
-     * Required by the Admin Calendar Grid view to map operating vs. non-operating hours.
-     */
     public static function get_location_shifts_for_week($location_id, $week_start_date)
     {
         global $wpdb;
         $t_sched = $wpdb->prefix . 'bbe_schedules';
-
         $week_end_date = date('Y-m-d', strtotime($week_start_date . ' +6 days'));
 
-        // Fetch recurring weekly shifts + specific date overrides falling into or matching the week range
         $shifts = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM $t_sched WHERE location_id = %d AND (specific_date IS NULL OR (specific_date BETWEEN %s AND %s))",
             $location_id,
@@ -174,7 +190,24 @@ class BBE_Availability
                     $start_time = $item->get_meta('_bbe_booking_start');
                     if (!empty($start_time)) {
                         $p_id = $item->get_product_id();
-                        $dur = (int) get_post_meta($p_id, '_bbe_duration', true);
+                        $v_id = $item->get_variation_id();
+
+                        $target_id = $v_id ? $v_id : $p_id;
+                        $target_prod = wc_get_product($target_id);
+                        $dur = 0;
+                        if ($target_prod && $target_prod->is_type('variation')) {
+                            $raw_d = $target_prod->get_attribute('pa_duration') ?: $target_prod->get_attribute('duration');
+                            if (preg_match('/(\d+)/', sanitize_title($raw_d), $m)) {
+                                $dur = (int) $m[1];
+                            }
+                        }
+                        if (!$dur) {
+                            $dur = (int) get_post_meta($target_id, '_bbe_duration', true);
+                        }
+                        if (!$dur && !$target_prod->is_type('variable')) {
+                            $dur = 15;
+                        }
+
                         $buf = (int) get_post_meta($p_id, '_bbe_buffer', true);
                         $end_ts = strtotime($start_time) + (($dur + $buf) * 60);
 

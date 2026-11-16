@@ -1,0 +1,52 @@
+// Hides the H1 page title on the store home
+body.post-type-archive-product {
+    .hero-section {
+        header.entry-header {
+            h1 {
+                display: none !important;
+            }
+        }
+    }
+
+    .woocommerce-products-header,
+    .woocommerce-notices-wrapper,
+    .woo-listing-top,
+    ul.products {
+        display: none;
+    }
+}
+
+// Styles up the store home page landing objects
+.wc-store-category-landing {
+    .wc-store-category-section {
+        .wc-store-category-grid {
+            .wc-store-category-card {
+                &__content {
+                    // background-color: saddlebrown;
+                    font-size: smaller;
+                    text-align: center;
+                }
+
+                img {
+                    border-radius: 10px;
+                    margin-bottom: 1rem;
+                }
+            }
+        }
+
+        .wc-store-category-grid {
+            display: grid;
+            /* Ensures items take equal width, have a minimum size of 250px, 
+            and never exceed 3 columns on standard screens */
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem; /* Adjust the gap between items here */
+        }
+
+        .item {
+            /* Optional styling for visibility */
+            padding: 1.5rem;
+            background: #f4f4f4;
+            border-radius: 8px;
+        }
+    }
+}

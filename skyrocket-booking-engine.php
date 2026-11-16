@@ -5,7 +5,7 @@
  * Version: 1.0.0
  * Author: Custom Developer
  */
-
+// return;
 if (!defined('ABSPATH'))
     exit;
 
@@ -27,6 +27,7 @@ require_once BBE_PATH . 'includes/class-bbe-admin-schedule.php';
 require_once BBE_PATH . 'includes/class-bbe-frontend.php';
 require_once BBE_PATH . 'includes/class-bbe-checkout.php';
 require_once BBE_PATH . 'includes/class-bbe-admin-calendar.php';
+require_once BBE_PATH . 'includes/bbe-shortcodes.php';
 
 register_activation_hook(__FILE__, 'bbe_create_custom_tables');
 

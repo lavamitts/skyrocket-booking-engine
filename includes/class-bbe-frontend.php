@@ -1,195 +1,346 @@
 <?php
-if (!defined('ABSPATH'))
+if (!defined('ABSPATH')) {
     exit;
+}
 
 class BBE_Frontend
 {
-
     public static function init()
     {
-        // Hook into Blocksy's full-width slot right before the product tabs
-        add_action('woocommerce_after_single_product_summary', [__CLASS__, 'render_booking_widget'], 5);
+        // 1. Conditional removal of native Add to Cart hooks based on product structure
+        add_action('wp', [__CLASS__, 'manage_product_cart_hooks'], 20);
 
-        // Dynamically remove standard add-to-cart ONLY if the current product is a bookable service
-        add_action('wp', [__CLASS__, 'conditional_remove_native_cart']);
+        // 2. Scoped CSS: hides native Add to Cart button & qty box ONLY for variable services
+        add_action('wp_head', [__CLASS__, 'hide_service_add_to_cart_css']);
 
-        add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
+        // 3. Force quantity to 1 for service products
+        add_filter('woocommerce_is_sold_individually', [__CLASS__, 'force_sold_individually'], 10, 2);
 
-        add_action('wp_ajax_bbe_get_slots', [__CLASS__, 'ajax_get_slots']);
-        add_action('wp_ajax_nopriv_bbe_get_slots', [__CLASS__, 'ajax_get_slots']);
+        // 4. Parse duration slug from variation
+        add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'capture_service_duration_meta'], 10, 3);
+
+        // 5. Render appropriate booking flow buttons based on variant structure
+        add_action('woocommerce_after_variations_table', [__CLASS__, 'render_variable_service_booking_flow']);
+        add_action('woocommerce_single_product_summary', [__CLASS__, 'render_single_service_booking_flow'], 30);
     }
 
     /**
-     * Check if current single product is a bookable service. If so, remove native add-to-cart.
+     * Determine whether the current product is a service
      */
-    public static function conditional_remove_native_cart()
+    private static function is_service_product($product): bool
     {
-        if (is_product()) {
-            global $post;
-            $is_service = get_post_meta($post->ID, '_bbe_is_service', true) === 'yes';
-            if ($is_service) {
-                remove_action('woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30);
-            }
+        if (class_exists('BBE_Product_Type') && method_exists('BBE_Product_Type', 'is_service')) {
+            return BBE_Product_Type::is_service($product);
         }
+        return false;
+    }
+    /**
+     * Determine whether the current product is a package
+     */
+    private static function is_package_product($product): bool
+    {
+        if (class_exists('BBE_Product_Type') && method_exists('BBE_Product_Type', 'is_package_product')) {
+            return BBE_Product_Type::is_package_product($product);
+        }
+        return false;
     }
 
-    public static function enqueue_assets()
+    /**
+     * Determine whether the service product has multiple variations
+     */
+    private static function has_multiple_variations($product): bool
     {
-        if (is_product()) {
-            global $post;
-            $is_service = get_post_meta($post->ID, '_bbe_is_service', true) === 'yes';
-            if ($is_service) {
-                wp_enqueue_style('bbe-booking-css', BBE_URL . 'assets/css/booking.css', [], '1.0.6');
-                wp_enqueue_script('bbe-booking-js', BBE_URL . 'assets/js/booking.js', ['jquery'], '1.0.6', true);
-
-                wp_localize_script('bbe-booking-js', 'bbe_vars', [
-                    'ajax_url' => admin_url('admin-ajax.php'),
-                    'nonce' => wp_create_nonce('bbe_booking_nonce')
-                ]);
-            }
+        if (class_exists('BBE_Product_Type') && method_exists('BBE_Product_Type', 'has_multiple_variations')) {
+            return BBE_Product_Type::has_multiple_variations($product);
         }
+        return false;
     }
 
-    public static function render_booking_widget()
+    /**
+     * Manage cart hooks: 
+     * - Physical products: untouched.
+     * - Single flat services: remove standard summary add-to-cart so we can replace it with our direct button.
+     * - Variable services: strip single variation add-to-cart button while preserving dropdowns.
+     */
+    public static function manage_product_cart_hooks()
     {
-        global $product;
-        if (!$product)
+        if (!is_product()) {
             return;
+        }
 
-        $is_service = get_post_meta($product->get_id(), '_bbe_is_service', true) === 'yes';
-        if (!$is_service)
-            return; // Physical products bypass this entirely and use native UI
+        $product = wc_get_product(get_queried_object_id());
+        if (!self::is_service_product($product)) {
+            return; // Physical product: do nothing, keep native ATB
+        }
 
-        $locations = get_posts([
-            'post_type' => 'bbe_location',
-            'numberposts' => -1,
-            'orderby' => 'title',
-            'order' => 'ASC'
-        ]);
-
-        $product_location_override = get_post_meta($product->get_id(), '_bbe_location_override', true);
-
-        $allowed_location_ids = [];
-        if (!empty($product_location_override)) {
-            $allowed_location_ids = [$product_location_override];
+        if (self::has_multiple_variations($product)) {
+            // Variable service: remove just the button inside the variation form
+            remove_action('woocommerce_single_variation', 'woocommerce_single_variation_add_to_cart_button', 20);
         } else {
-            $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'ids']);
-            foreach ($categories as $cat_id) {
-                $cat_locs = get_term_meta($cat_id, '_bbe_allowed_locations', true);
-                if (is_array($cat_locs)) {
-                    $allowed_location_ids = array_merge($allowed_location_ids, $cat_locs);
+            // Single flat service (e.g. 15-min fixed): remove the native add to cart entirely
+            remove_action('woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30);
+        }
+    }
+
+    /**
+     * CSS failsafe: hides native Add to Basket button & qty box ONLY on variable service PDPs
+     */
+    public static function hide_service_add_to_cart_css()
+    {
+        if (!is_product()) {
+            return;
+        }
+
+        $product = wc_get_product(get_queried_object_id());
+        if (!self::is_service_product($product) || !self::has_multiple_variations($product)) {
+            return;
+        }
+        ?>
+        <style type="text/css">
+            .single-product form.cart .single_add_to_cart_button,
+            .single-product form.cart .quantity {
+                display: none !important;
+            }
+        </style>
+        <?php
+    }
+
+    /**
+     * Force quantity to 1 for service items so they cannot be multiplied
+     */
+    public static function force_sold_individually($return, $product)
+    {
+        if (self::is_service_product($product)) {
+            return true;
+        }
+        return $return;
+    }
+
+    /**
+     * Parse duration slug ('30', '45', '60', etc.) from the selected variation attribute
+     */
+    public static function capture_service_duration_meta($cart_item_data, $product_id, $variation_id)
+    {
+        $target_id = $variation_id ? $variation_id : $product_id;
+        $product = wc_get_product($target_id);
+
+        if (!self::is_service_product($product)) {
+            return $cart_item_data;
+        }
+
+        $duration_mins = 0;
+
+        if ($product->is_type('variation')) {
+            $attributes = $product->get_attributes();
+            $raw_slug = '';
+            foreach (['pa_duration', 'duration'] as $attr_key) {
+                if (isset($attributes[$attr_key])) {
+                    $raw_slug = $attributes[$attr_key];
+                    break;
                 }
             }
-            $allowed_location_ids = array_unique($allowed_location_ids);
-        }
 
-        $valid_locations = [];
-        foreach ($locations as $loc) {
-            if (empty($allowed_location_ids) || in_array($loc->ID, $allowed_location_ids)) {
-                $valid_locations[] = $loc;
+            if (empty($raw_slug) && is_array($attributes)) {
+                $raw_slug = reset($attributes);
+            }
+
+            $clean_slug = sanitize_title($raw_slug);
+            if (preg_match('/(\d+)/', $clean_slug, $matches)) {
+                $duration_mins = intval($matches[1]);
             }
         }
-        $valid_count = count($valid_locations);
+
+        if ($duration_mins > 0) {
+            $cart_item_data['bbe_duration'] = $duration_mins;
+            $cart_item_data['_bbe_booking_duration'] = $duration_mins;
+        }
+
+        return $cart_item_data;
+    }
+
+    /**
+     * Render direct, ALREADY ENABLED booking button for single services with no variants (e.g. 15 mins)
+     */
+    public static function render_single_service_booking_flow()
+    {
+        global $product;
+        if (!self::is_service_product($product) || self::has_multiple_variations($product)) {
+            return;
+        }
+
+        $booking_page_url = add_query_arg('product_id', $product->get_id(), home_url('/book-session/'));
         ?>
-
-        <!-- Full-Width Booking Engine inside Blocksy layout -->
-        <div class="ct-container" style="clear: both; width: 100%; margin-top: 40px; margin-bottom: 40px;">
-            <div id="bbe-booking-container" data-product-id="<?php echo esc_attr($product->get_id()); ?>">
-
-                <h2><?php _e('Book Your Appointment', 'bbe'); ?></h2>
-
-                <!-- 1. Location Selection -->
-                <div class="bbe-step-location"
-                    style="margin-bottom: 25px; <?php echo ($valid_count === 1) ? 'display:none;' : ''; ?>">
-                    <label class="bbe-label"><?php _e('1. Select Location / Clinic', 'bbe'); ?></label>
-                    <select id="bbe-location-select" name="bbe_location_id" class="bbe-select">
-                        <option value=""><?php _e('-- Choose Location --', 'bbe'); ?></option>
-                        <?php foreach ($valid_locations as $loc): ?>
-                            <option value="<?php echo $loc->ID; ?>" <?php selected($valid_count, 1); ?>>
-                                <?php echo esc_html($loc->post_title); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <?php if ($valid_count === 1): ?>
-                    <input type="hidden" id="bbe-location-select" name="bbe_location_id"
-                        value="<?php echo $valid_locations[0]->ID; ?>">
-                <?php endif; ?>
-
-                <!-- 2. Calendar Date & Slot Picker -->
-                <div class="bbe-step-calendar"
-                    style="margin-bottom: 25px; <?php echo ($valid_count > 1) ? 'display:none;' : ''; ?>">
-                    <label class="bbe-label"><?php _e('2. Select Date & Time Slot', 'bbe'); ?></label>
-
-                    <div class="bbe-calendar-nav">
-                        <button type="button" id="bbe-prev-week" class="button">&laquo;
-                            <?php _e('Previous Week', 'bbe'); ?></button>
-                        <span id="bbe-date-range-label" style="font-weight: bold; font-size: 14px;"></span>
-                        <button type="button" id="bbe-next-week" class="button"><?php _e('Next Week', 'bbe'); ?>
-                            &raquo;</button>
-                    </div>
-
-                    <div id="bbe-slots-grid" class="bbe-slots-grid">
-                        <p class="bbe-notice"><?php _e('Please select a location above to view available slots.', 'bbe'); ?></p>
-                    </div>
-                </div>
-
-                <!-- 3. WooCommerce Add to Cart Form Wrapper (Naturally below selection tools) -->
-                <div class="bbe-step-cart">
-                    <form class="cart" method="post" enctype="multipart/form-data" id="bbe-cart-form" style="display:none;">
-                        <input type="hidden" name="add-to-cart" value="<?php echo esc_attr($product->get_id()); ?>">
-                        <input type="hidden" name="bbe_start_time" id="bbe_input_start_time">
-                        <input type="hidden" name="bbe_location_id" id="bbe_input_location_id">
-
-                        <div id="bbe-selected-summary" style="margin-bottom: 15px; font-size: 1.05em;">
-                            <strong><?php _e('Selected Slot:', 'bbe'); ?></strong><br>
-                            <span id="bbe-summary-text" style="color: #007cba; font-weight: bold;"></span>
-                        </div>
-
-                        <button type="submit" class="single_add_to_cart_button button alt">
-                            <?php echo esc_html($product->single_add_to_cart_text()); ?>
-                        </button>
-                    </form>
-                </div>
-
-            </div>
+        <div id="bbe-single-service-booking-container" style="margin: 20px 0;">
+            <a href="<?php echo esc_url($booking_page_url); ?>" id="bbe-book-session-btn" class="button alt"
+                style="display: block; text-align: center; padding: 12px; font-size: 16px; background: #0288d1; color: #fff; text-decoration: none; border-radius: 4px; cursor: pointer;">
+                <?php esc_html_e('Book my session', 'bbe'); ?>
+            </a>
         </div>
         <?php
     }
 
-    public static function ajax_get_slots()
+    /**
+     * Render DISABLED-BY-DEFAULT booking button for services with multiple variations
+     */
+    public static function render_variable_service_booking_flow()
     {
-        check_ajax_referer('bbe_booking_nonce', 'nonce');
-
-        $product_id = intval($_POST['product_id']);
-        $location_id = intval($_POST['location_id']);
-        $start_date = sanitize_text_field($_POST['start_date']);
-
-        if (!$product_id || !$location_id || !$start_date) {
-            wp_send_json_error(['message' => __('Invalid parameters.', 'bbe')]);
+        global $product;
+        if (!self::is_service_product($product) || !self::has_multiple_variations($product)) {
+            return;
         }
 
-        $week_days = [];
-        $base_ts = strtotime($start_date);
+        $booking_page_url = home_url('/book-session/');
+        $is_package = self::is_package_product($product);
+        if ($is_package) {
+            $book_session_button_text = 'Book my first session';
+        } else {
+            $book_session_button_text = 'Book my session';
+        }
+        ?>
+        <div id="bbe-service-booking-container ct-container" style="margin: 20px 0;">
+            <button type="button" id="bbe-book-session-btn" class="button alt disabled" disabled="disabled"
+                style="opacity: 0.5; cursor: not-allowed; width: 100%; text-align: center; padding: 12px; font-size: 16px;">
+                <?php esc_html_e($book_session_button_text, 'bbe'); ?>
+            </button>
+        </div>
 
-        for ($i = 0; $i < 7; $i++) {
-            $day_ts = strtotime("+$i days", $base_ts);
-            $date_str = date('Y-m-d', $day_ts);
+        <script type="text/javascript">
+            jQuery(function ($) {
+                const $form = $('form.variations_form');
+                const $btn = $('#bbe-book-session-btn');
+                const bookingBaseUrl = <?php echo wp_json_encode(esc_url_raw($booking_page_url)); ?>;
 
-            $slots = BBE_Availability::get_available_slots($product_id, $location_id, $date_str);
+                if (!$form.length || !$btn.length) {
+                    return;
+                }
 
-            $week_days[] = [
-                'date' => $date_str,
-                'formatted' => date('D, M j', $day_ts),
-                'slots' => $slots
+                function evaluateButtonState() {
+                    let hasDurationSelected = false;
+
+                    $form.find('.variations select').each(function () {
+                        const name = $(this).attr('name') || '';
+                        const val = $(this).val();
+                        if (name.includes('duration') && val && val !== '') {
+                            hasDurationSelected = true;
+                            return false;
+                        }
+                    });
+
+                    if (hasDurationSelected) {
+                        $btn.removeClass('disabled')
+                            .removeAttr('disabled')
+                            .css({ 'opacity': '1', 'cursor': 'pointer' });
+                    } else {
+                        $btn.addClass('disabled')
+                            .attr('disabled', 'disabled')
+                            .css({ 'opacity': '0.5', 'cursor': 'not-allowed' });
+                    }
+                }
+
+                $form.on('found_variation reset_data hide_variation check_variations change', 'select', function () {
+                    setTimeout(evaluateButtonState, 50);
+                });
+
+                evaluateButtonState();
+
+                $btn.on('click', function (e) {
+                    e.preventDefault();
+                    if ($(this).is(':disabled') || $(this).hasClass('disabled')) {
+                        return;
+                    }
+
+                    let variationId = $form.find('input.variation_id').val();
+                    const productId = $form.find('input[name="product_id"]').val() || <?php echo (int) $product->get_id(); ?>;
+
+                    const url = new URL(bookingBaseUrl);
+                    url.searchParams.set('product_id', productId);
+
+                    if (variationId && variationId !== '0' && variationId !== '') {
+                        url.searchParams.set('variation_id', variationId);
+                    } else {
+                        $form.find('.variations select').each(function () {
+                            const name = $(this).attr('name');
+                            const val = $(this).val();
+                            if (name && val) {
+                                url.searchParams.set(name, val);
+                            }
+                        });
+                    }
+
+                    window.location.href = url.toString();
+                });
+            });
+        </script>
+        <?php
+    }
+
+    public static function get_booking_request_context(): ?array
+    {
+        $variation_id = isset($_GET['variation_id']) ? absint($_GET['variation_id']) : 0;
+        $product_id = isset($_GET['product_id']) ? absint($_GET['product_id']) : 0;
+
+        // If no variation ID passed directly, check attributes or handle single flat service products
+        if (!$variation_id && $product_id) {
+            $product = wc_get_product($product_id);
+            if ($product) {
+                if ($product->is_type('variable')) {
+                    $matched_attributes = [];
+                    foreach ($_GET as $key => $value) {
+                        if (strpos($key, 'attribute_') === 0) {
+                            $matched_attributes[$key] = sanitize_text_field(wp_unslash($value));
+                        }
+                    }
+
+                    if (!empty($matched_attributes)) {
+                        $data_store = WC_Data_Store::load('product');
+                        $found_variation_id = $data_store->find_matching_product_variation($product, $matched_attributes);
+                        if ($found_variation_id) {
+                            $variation_id = $found_variation_id;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If it's a variation service
+        if ($variation_id) {
+            $variation = wc_get_product($variation_id);
+            if (!$variation || !$variation->is_type('variation') || !self::is_service_product($variation)) {
+                return null;
+            }
+
+            $parent_id = $variation->get_parent_id();
+            $raw_duration = $variation->get_attribute('pa_duration') ?: $variation->get_attribute('duration');
+            preg_match('/(\d+)/', sanitize_title($raw_duration), $matches);
+
+            return [
+                'product_id' => $parent_id,
+                'variation_id' => $variation_id,
+                'service_name' => $variation->get_name(),
+                'price' => $variation->get_price(),
+                'duration_mins' => isset($matches[1]) ? (int) $matches[1] : 15, // fallback to 15 if unparsed
+                'buffer_mins' => (int) get_post_meta($parent_id, '_bbe_buffer', true),
+                'location_override' => (int) get_post_meta($parent_id, '_bbe_location_override', true),
             ];
         }
 
-        wp_send_json_success([
-            'week_days' => $week_days,
-            'range' => date('M j, Y', $base_ts) . ' &mdash; ' . date('M j, Y', strtotime('+6 days', $base_ts))
-        ]);
+        // Fallback context builder for flat single service products (e.g. 15-min fixed items with no variants)
+        if ($product_id) {
+            $product = wc_get_product($product_id);
+            if ($product && self::is_service_product($product) && !self::has_multiple_variations($product)) {
+                return [
+                    'product_id' => $product_id,
+                    'variation_id' => 0,
+                    'service_name' => $product->get_name(),
+                    'price' => $product->get_price(),
+                    'duration_mins' => 15, // Default flat service duration
+                    'buffer_mins' => (int) get_post_meta($product_id, '_bbe_buffer', true),
+                    'location_override' => (int) get_post_meta($product_id, '_bbe_location_override', true),
+                ];
+            }
+        }
+
+        return null;
     }
 }
 BBE_Frontend::init();

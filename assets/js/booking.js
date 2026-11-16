@@ -2,17 +2,31 @@ jQuery(document).ready(function ($) {
   const container = $("#bbe-booking-container");
   if (!container.length) return;
 
+  // Capture both parent product ID and the selected variation ID from the wrapper
   const productId = container.data("product-id");
+  const variationId = container.data("variation-id");
 
   // Start from next week or current week's Monday, but ensure we don't allow going into past weeks
   let currentMonday = getNextValidMonday(new Date());
 
   const locationSelect = $("#bbe-location-select");
-  const cartForm = $("#bbe-cart-form");
 
+  // Helper function to safely get the location ID whether it's a dropdown or hidden input
+  function getLocationId() {
+    const el = $("#bbe-location-select");
+    if (!el.length) return "";
+    if (el.is("select")) {
+      return el.val();
+    }
+    return el.val() || el.attr("value") || "";
+  }
+
+  const cartForm = $("#bbe-cart-form");
   cartForm.hide();
 
-  if (locationSelect.val()) {
+  // Use the robust helper function on initial load
+  const initialLocationId = getLocationId();
+  if (initialLocationId) {
     $(".bbe-step-calendar").show();
     loadWeekSlots(currentMonday);
   }
@@ -23,7 +37,8 @@ jQuery(document).ready(function ($) {
     $(".bbe-slot-btn").removeClass("selected");
     cartForm.hide();
 
-    if ($(this).val()) {
+    const currentLocId = getLocationId();
+    if (currentLocId) {
       $(".bbe-step-calendar").show();
       loadWeekSlots(currentMonday);
     } else {
@@ -53,7 +68,7 @@ jQuery(document).ready(function ($) {
   });
 
   function loadWeekSlots(mondayDate) {
-    const locationId = locationSelect.val();
+    const locationId = getLocationId();
     if (!locationId) return;
 
     const dateStr = formatDate(mondayDate);
@@ -66,6 +81,7 @@ jQuery(document).ready(function ($) {
         action: "bbe_get_slots",
         nonce: bbe_vars.nonce,
         product_id: productId,
+        variation_id: variationId,
         location_id: locationId,
         start_date: dateStr,
       },
@@ -76,6 +92,9 @@ jQuery(document).ready(function ($) {
         } else {
           $("#bbe-slots-grid").html("<p>Error loading slots.</p>");
         }
+      },
+      error: function (xhr, status, error) {
+        $("#bbe-slots-grid").html("<p>Connection error loading slots.</p>");
       },
     });
   }
@@ -90,7 +109,6 @@ jQuery(document).ready(function ($) {
       let col = $('<div class="bbe-day-column">');
       col.append(`<div class="bbe-day-title">${day.formatted}</div>`);
 
-      // Extra frontend safety check: if day is today or in the past, show no slots
       if (day.date <= todayStr || day.slots.length === 0) {
         col.append('<div class="bbe-no-slots">No slots</div>');
       } else {
@@ -101,7 +119,7 @@ jQuery(document).ready(function ($) {
             $(".bbe-slot-btn").removeClass("selected");
             $(this).addClass("selected");
 
-            createTemporaryHold(productId, locationSelect.val(), slot.start, day.formatted + " at " + slot.display);
+            createTemporaryHold(productId, variationId, getLocationId(), slot.start, day.formatted + " at " + slot.display);
           });
 
           col.append(btn);
@@ -111,13 +129,14 @@ jQuery(document).ready(function ($) {
     });
   }
 
-  function createTemporaryHold(prodId, locId, startTime, displayLabel) {
+  function createTemporaryHold(prodId, varId, locId, startTime, displayLabel) {
     $.ajax({
       url: bbe_vars.ajax_url,
       type: "POST",
       data: {
         action: "bbe_create_hold",
         product_id: prodId,
+        variation_id: varId,
         location_id: locId,
         start_time: startTime,
       },
@@ -137,7 +156,7 @@ jQuery(document).ready(function ($) {
   }
 
   cartForm.on("submit", function (e) {
-    const loc = locationSelect.val();
+    const loc = getLocationId();
     const start = $("#bbe_input_start_time").val();
     if (!loc || !start) {
       e.preventDefault();
@@ -156,7 +175,6 @@ jQuery(document).ready(function ($) {
     let today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // If the Monday of this week is in the past, default to next week's Monday
     if (monday < today) {
       monday.setDate(monday.getDate() + 7);
     }

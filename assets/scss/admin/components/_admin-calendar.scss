@@ -198,7 +198,7 @@ table.bbe-booking-calendar-list-view-table {
     thead {
         tr {
             th {
-                background-color: v.$dark-grey;
+                background-color: v.$flogo-dark-grey;
                 color: white;
                 font-weight: bold;
 
@@ -215,7 +215,7 @@ table.bbe-booking-calendar-list-view-table {
     tbody {
         tr {
             td {
-                border-bottom: 1px v.$dark-grey dotted;
+                border-bottom: 1px v.$flogo-dark-grey dotted;
                 vertical-align: middle;
 
                 .bbe-payment-badge {

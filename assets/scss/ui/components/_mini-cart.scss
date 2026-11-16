@@ -1,0 +1,26 @@
+@use "../../common/variables" as v;
+
+$border-radius: 10px;
+
+.ct-cart-content {
+    background-color: v.$flogo-slate-navy !important;
+    border-bottom-left-radius: $border-radius !important;
+    border-bottom-right-radius: $border-radius !important;
+
+    div.product-data {
+        a {
+            color: white !important;
+            text-decoration: underline;
+
+            &:hover {
+                color: antiquewhite !important;
+            }
+        }
+    }
+    .woocommerce-mini-cart__buttons {
+        a.button {
+            background-color: v.$flogo-light-gold !important;
+            color: v.$flogo-slate-navy !important;
+        }
+    }
+}
