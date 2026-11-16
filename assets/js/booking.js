@@ -2,9 +2,39 @@ jQuery(document).ready(function ($) {
   const container = $("#bbe-booking-container");
   if (!container.length) return;
 
-  // Capture both parent product ID and the selected variation ID from the wrapper
-  const productId = container.data("product-id");
-  const variationId = container.data("variation-id");
+  // Helper function to dynamically resolve the correct variation ID
+  function getVariationId() {
+    // 1. Check URL query parameters (standard for booking flow redirects)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlVarId = urlParams.get("variation_id");
+    if (urlVarId && !isNaN(urlVarId) && parseInt(urlVarId) > 0) {
+      return parseInt(urlVarId, 10);
+    }
+
+    // 2. Check any dynamic input field on the page if present
+    const inputVar = $("#bbe_input_variation_id, input[name='variation_id']");
+    if (inputVar.length && inputVar.val()) {
+      return parseInt(inputVar.val(), 10);
+    }
+
+    // 3. Fallback to container data attribute
+    const dataVar = container.data("variation-id");
+    if (dataVar && !isNaN(dataVar) && parseInt(dataVar) > 0) {
+      return parseInt(dataVar, 10);
+    }
+
+    return 0;
+  }
+
+  // Helper function to dynamically resolve product ID
+  function getProductId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlProdId = urlParams.get("product_id");
+    if (urlProdId && !isNaN(urlProdId)) {
+      return parseInt(urlProdId, 10);
+    }
+    return container.data("product-id") || 0;
+  }
 
   // Start from next week or current week's Monday, but ensure we don't allow going into past weeks
   let currentMonday = getNextValidMonday(new Date());
@@ -80,8 +110,8 @@ jQuery(document).ready(function ($) {
       data: {
         action: "bbe_get_slots",
         nonce: bbe_vars.nonce,
-        product_id: productId,
-        variation_id: variationId,
+        product_id: getProductId(),
+        variation_id: getVariationId(),
         location_id: locationId,
         start_date: dateStr,
       },
@@ -119,7 +149,13 @@ jQuery(document).ready(function ($) {
             $(".bbe-slot-btn").removeClass("selected");
             $(this).addClass("selected");
 
-            createTemporaryHold(productId, variationId, getLocationId(), slot.start, day.formatted + " at " + slot.display);
+            createTemporaryHold(
+              getProductId(),
+              getVariationId(),
+              getLocationId(),
+              slot.start,
+              day.formatted + " at " + slot.display,
+            );
           });
 
           col.append(btn);

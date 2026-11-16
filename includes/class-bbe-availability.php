@@ -4,6 +4,59 @@ if (!defined('ABSPATH'))
 
 class BBE_Availability
 {
+    /**
+     * Helper to reliably extract duration in minutes (always referenced in minutes e.g. '15 minutes', '60 minutes').
+     */
+    public static function get_product_duration($target_id): int
+    {
+        $target_product = wc_get_product($target_id);
+        if (!$target_product) {
+            return 15; // Safe fallback
+        }
+
+        $duration = 0;
+
+        // 1. Check if it's a variation or simple product with attributes
+        $raw_d = $target_product->get_attribute('pa_duration') ?: $target_product->get_attribute('duration');
+        if (empty($raw_d)) {
+            $raw_d = $target_product->get_meta('attribute_pa_duration') ?: $target_product->get_meta('attribute_duration');
+        }
+        if (preg_match('/(\d+)/', sanitize_title($raw_d), $m)) {
+            $duration = (int) $m[1];
+        }
+
+        // 2. Check product-level post meta '_bbe_duration'
+        if (!$duration) {
+            $duration = (int) get_post_meta($target_id, '_bbe_duration', true);
+        }
+
+        // 3. If parent product, check if parent has meta
+        if (!$duration && $target_product->is_type('variation')) {
+            $parent_id = $target_product->get_parent_id();
+            if ($parent_id) {
+                $duration = (int) get_post_meta($parent_id, '_bbe_duration', true);
+            }
+        }
+
+        // Final failsafe
+        return $duration ? $duration : 15;
+    }
+
+    /**
+     * Helper to reliably extract buffer time in minutes (always stored as an integer).
+     */
+    public static function get_product_buffer($product_id, $variation_id = 0): int
+    {
+        $buffer = (int) get_post_meta($product_id, '_bbe_buffer', true);
+        if (!$buffer && $variation_id) {
+            $parent_id = wp_get_post_parent_id($variation_id);
+            if ($parent_id) {
+                $buffer = (int) get_post_meta($parent_id, '_bbe_buffer', true);
+            }
+        }
+        return $buffer;
+    }
+
     public static function get_available_slots($product_id, $variation_id, $location_id, $date_str)
     {
         global $wpdb;
@@ -15,30 +68,8 @@ class BBE_Availability
         }
 
         $target_id = $variation_id ? $variation_id : $product_id;
-        $target_product = wc_get_product($target_id);
-
-        if (!$target_product) {
-            return [];
-        }
-
-        $duration = 0;
-        if ($target_product->is_type('variation')) {
-            $raw_duration = $target_product->get_attribute('pa_duration') ?: $target_product->get_attribute('duration');
-            if (preg_match('/(\d+)/', sanitize_title($raw_duration), $matches)) {
-                $duration = (int) $matches[1];
-            }
-        }
-
-        if (!$duration) {
-            $duration = (int) get_post_meta($target_id, '_bbe_duration', true);
-        }
-
-        // FAILSAFE: If it's a flat simple service product and still has no duration set, default to 15 mins
-        if (!$duration && !$target_product->is_type('variable')) {
-            $duration = 15;
-        }
-
-        $buffer = (int) get_post_meta($product_id, '_bbe_buffer', true);
+        $duration = self::get_product_duration($target_id);
+        $buffer = self::get_product_buffer($product_id, $variation_id);
         $total_needed_mins = $duration + $buffer;
 
         if (!$duration)
@@ -168,53 +199,55 @@ class BBE_Availability
         global $wpdb;
         $busy = [];
 
+        // 1. Fetch active temporary holds for this specific date
         $t_holds = $wpdb->prefix . 'bbe_holds';
-        $holds = $wpdb->get_results($wpdb->prepare(
+        $holds = $wpdb->get_rows ? $wpdb->get_results($wpdb->prepare( // standard get_results
             "SELECT booking_start, booking_end FROM $t_holds WHERE location_id = %d AND DATE(booking_start) = %s AND expires_at > NOW()",
             $location_id,
             $date_str
-        ));
+        )) : [];
+
         foreach ($holds as $h) {
             $busy[] = ['start' => $h->booking_start, 'end' => $h->booking_end];
         }
 
+        // 2. Fetch processing and completed orders (without restrictive date_created filtering)
+        // We fetch orders and check their item meta booking start date directly.
         $orders = wc_get_orders([
-            'limit' => -1,
+            'limit' => 50, // Adjust or remove limit if high volume expected
             'status' => ['processing', 'completed'],
-            'date_created' => $date_str . ' 00:00:00...' . $date_str . ' 23:59:59'
+            'orderby' => 'date',
+            'order' => 'DESC',
         ]);
 
         foreach ($orders as $order) {
             foreach ($order->get_items() as $item) {
+                if (!is_a($item, 'WC_Order_Item_Product')) {
+                    continue;
+                }
+
                 if ((int) $item->get_meta('_bbe_location_id') === $location_id) {
-                    $start_time = $item->get_meta('_bbe_booking_start');
+                    $start_time = $item->get_meta('_bbe_booking_start'); // e.g., '2026-11-17 09:00:00'
+
                     if (!empty($start_time)) {
-                        $p_id = $item->get_product_id();
-                        $v_id = $item->get_variation_id();
+                        // Check if this booked appointment falls on the target date being viewed ($date_str)
+                        $appointment_date = substr($start_time, 0, 10);
 
-                        $target_id = $v_id ? $v_id : $p_id;
-                        $target_prod = wc_get_product($target_id);
-                        $dur = 0;
-                        if ($target_prod && $target_prod->is_type('variation')) {
-                            $raw_d = $target_prod->get_attribute('pa_duration') ?: $target_prod->get_attribute('duration');
-                            if (preg_match('/(\d+)/', sanitize_title($raw_d), $m)) {
-                                $dur = (int) $m[1];
-                            }
-                        }
-                        if (!$dur) {
-                            $dur = (int) get_post_meta($target_id, '_bbe_duration', true);
-                        }
-                        if (!$dur && !$target_prod->is_type('variable')) {
-                            $dur = 15;
-                        }
+                        if ($appointment_date === $date_str) {
+                            $p_id = $item->get_product_id();
+                            $v_id = $item->get_variation_id();
+                            $target_id = $v_id ? $v_id : $p_id;
 
-                        $buf = (int) get_post_meta($p_id, '_bbe_buffer', true);
-                        $end_ts = strtotime($start_time) + (($dur + $buf) * 60);
+                            $dur = self::get_product_duration($target_id);
+                            $buf = self::get_product_buffer($p_id, $v_id);
 
-                        $busy[] = [
-                            'start' => $start_time,
-                            'end' => date('Y-m-d H:i:s', $end_ts)
-                        ];
+                            $end_ts = strtotime($start_time) + (($dur + $buf) * 60);
+
+                            $busy[] = [
+                                'start' => $start_time,
+                                'end' => date('Y-m-d H:i:s', $end_ts)
+                            ];
+                        }
                     }
                 }
             }

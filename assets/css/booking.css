@@ -72,18 +72,12 @@
   background: #f7f7f7;
   border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 8px;
+  padding: 4px 8px;
   margin-bottom: 6px;
   text-align: center;
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s ease;
-}
-
-.bbe-slot-btn {
-  background: #ffffff;
-  color: #000000;
-  border-color: #000000;
 }
 
 .bbe-slot-btn:hover {
@@ -116,7 +110,7 @@
   box-sizing: border-box;
 }
 
-#bbe-cart-form button[type="submit"] {
+#bbe-cart-form button[type=submit] {
   display: block;
   width: 100%;
   max-width: 400px;
@@ -130,6 +124,6 @@
   cursor: pointer;
 }
 
-#bbe-cart-form button[type="submit"]:hover {
+#bbe-cart-form button[type=submit]:hover {
   background: #005a87;
 }
