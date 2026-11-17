@@ -3,7 +3,7 @@
  * Plugin Name: Skyrocket Booking Engine
  * Description: WooCommerce-integrated booking engine with multi-location, buffer times, and temporary slot holds.
  * Version: 1.0.0
- * Author: Custom Developer
+ * Author: Skyrocket Digital Development
  */
 // return;
 if (!defined('ABSPATH'))
@@ -14,6 +14,17 @@ define('BBE_URL', plugin_dir_url(__FILE__));
 
 // Plugin version constant, used for cache-busting CSS and JavaScript.
 define('BBE_VERSION', '1.0.0');
+
+// GitHub updater configuration
+$github_updater_config = [
+    'username' => 'lavamitts',
+    'repository' => 'skyrocket-booking-engine',
+    'plugin_file' => __FILE__,
+];
+
+// Updater code
+require_once __DIR__ . '/vendor/lavamitts/skyrocket-plugin-updater/src/plugin-updater.php';
+
 
 // Load includes
 require_once BBE_PATH . 'includes/hooks/bootstrapper.php';
